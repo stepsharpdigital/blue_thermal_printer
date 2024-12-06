@@ -54,6 +54,11 @@ import com.google.zxing.MultiFormatWriter;
 import com.google.zxing.common.BitMatrix;
 import com.journeyapps.barcodescanner.BarcodeEncoder;
 
+//New Added
+import android.os.Build;
+import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
+
 public class BlueThermalPrinterPlugin implements FlutterPlugin, ActivityAware,MethodCallHandler, RequestPermissionsResultListener {
 
   private static final String TAG = "BThermalPrinterPlugin";
@@ -266,6 +271,15 @@ public class BlueThermalPrinterPlugin implements FlutterPlugin, ActivityAware,Me
 
         break;
 
+      case "getAliasName":
+        if (arguments.containsKey("address")) {
+                String address = (String) arguments.get("address");
+                getAliasName(result, address);
+        } else {
+                result.error("invalid_argument", "argument 'address' not found", null);
+        }
+        break;
+
       case "connect":
         if (arguments.containsKey("address")) {
           String address = (String) arguments.get("address");
@@ -456,6 +470,7 @@ public class BlueThermalPrinterPlugin implements FlutterPlugin, ActivityAware,Me
       ret.put("address", device.getAddress());
       ret.put("name", device.getName());
       ret.put("type", device.getType());
+      ret.put("aliasName", getAliasName(device));
       list.add(ret);
     }
 
@@ -497,6 +512,48 @@ public class BlueThermalPrinterPlugin implements FlutterPlugin, ActivityAware,Me
     ex.printStackTrace(pw);
     return sw.toString();
   }
+
+  private void getAliasName(Result result, String address) {
+      try {
+          BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(address);
+          if (device == null) {
+              result.error("device_not_found", "Device not found", null);
+              return;
+          }
+          String name = getAliasName(device);
+          result.success(name);
+      } catch (Exception e) {
+          Log.e(TAG, "Error getting device alias name", e);
+          result.error("get_device_name_error", e.getMessage(), exceptionToString(e));
+      }
+  }
+
+  private String getAliasName(BluetoothDevice device) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            String alias = device.getAlias();
+            if (alias != null) {
+                Log.d(TAG, "Bluetooth Alias Name: " + alias);
+                return alias;
+            }
+        } else {
+            Method method = device.getClass().getMethod("getAliasName");
+            if (method != null) {
+                Object alias = method.invoke(device);
+                if (alias != null) {
+                    Log.d(TAG, "Bluetooth Alias Name: " + alias.toString());
+                    return alias.toString();
+                }
+            }
+        }
+    } catch (Exception e) {
+        Log.e(TAG, "Cannot get alias name", e);
+    }
+    String defaultName = device.getName();
+    Log.d(TAG, "Use the default name: " + defaultName);
+    return defaultName;
+}
+
 
   /**
    * @param result  result

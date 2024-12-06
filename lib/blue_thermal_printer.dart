@@ -1,7 +1,11 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
+
+import 'package:blue_thermal_printer/print_type_registry.dart';
 
 class BlueThermalPrinter {
   static const int STATE_OFF = 10;
@@ -73,6 +77,10 @@ class BlueThermalPrinter {
   ///isDeviceConnected(BluetoothDevice device)
   Future<bool?> isDeviceConnected(BluetoothDevice device) =>
       _channel.invokeMethod('isDeviceConnected', device.toMap());
+
+  ///getAliasName(BluetoothDevice device)
+  Future<String?> getAliasName(BluetoothDevice device) =>
+      _channel.invokeMethod('getAliasName', device.toMap());
 
   ///connect(BluetoothDevice device)
   Future<dynamic> connect(BluetoothDevice device) =>
@@ -171,26 +179,86 @@ class BlueThermalPrinter {
 class BluetoothDevice {
   final String? name;
   final String? address;
+  final String? aliasName;
   final int type = 0;
   bool connected = false;
+  List<PrinterType> printerTypes = [];
 
-  BluetoothDevice(this.name, this.address);
+  BluetoothDevice(this.name, this.address, this.aliasName);
 
   BluetoothDevice.fromMap(Map map)
       : name = map['name'],
-        address = map['address'];
+        address = map['address'],
+        aliasName = map['aliasName'],
+        printerTypes = map['printerTypes'] != null
+            ? List<Map<String, dynamic>>.from(jsonDecode(map['printerTypes']))
+                .map((printTypeMap) {
+                String type = printTypeMap['type'];
+                // Map<String, dynamic>? data = printTypeMap['data'];
+                final printTypeInstance =
+                    PrinterTypeRegistry.getPrintType(type, printTypeMap);
+                if (printTypeInstance != null) {
+                  return printTypeInstance;
+                } else {
+                  print('Undefined Printer Type: $type');
+                  throw Exception('Unsupported Printer Type: $type');
+                }
+              }).toList()
+            : [];
 
   Map<String, dynamic> toMap() => {
         'name': this.name,
         'address': this.address,
         'type': this.type,
+        'aliasName': this.aliasName,
         'connected': this.connected,
+        'printerTypes': serializePrinterTypes(),
       };
 
   operator ==(Object other) {
-    return other is BluetoothDevice && other.address == this.address;
+    return other is BluetoothDevice &&
+        other.address == this.address &&
+        other.aliasName == this.aliasName;
   }
 
   @override
   int get hashCode => address.hashCode;
+
+  String serializePrinterTypes() {
+    List<Map<String, dynamic>> printTypesMap =
+        printerTypes.map((printType) => printType.toMap()).toList();
+    return jsonEncode(printTypesMap);
+  }
+
+  static List<PrinterType> deserializePrinterTypes(String jsonString) {
+    final List<dynamic> jsonList = jsonDecode(jsonString);
+    return jsonList.map((printTypeMap) {
+      String type = printTypeMap['type'];
+      // Map<String, dynamic>? data = printTypeMap['data'];
+      final printTypeInstance =
+          PrinterTypeRegistry.getPrintType(type, printTypeMap);
+      if (printTypeInstance != null) {
+        return printTypeInstance;
+      } else {
+        throw Exception('Unknown Printer Type: $type');
+      }
+    }).toList();
+  }
+
+  BluetoothDevice copyWith({
+    String? name,
+    String? address,
+    String? aliasName,
+    bool? connected,
+    List<PrinterType>? printerTypes,
+  }) {
+    return BluetoothDevice(
+      name ?? this.name,
+      address ?? this.address,
+      aliasName ?? this.aliasName,
+    )
+      ..connected = connected ?? this.connected
+      ..printerTypes =
+          printerTypes ?? this.printerTypes.map((pt) => pt.copyWith()).toList();
+  }
 }

@@ -1,10 +1,31 @@
-import 'package:blue_thermal_printer_example/testprint.dart';
-import 'package:flutter/material.dart';
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:async';
-import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-void main() => runApp(new MyApp());
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:blue_thermal_printer/print_type_registry.dart';
+import 'package:blue_thermal_printer_example/testprint.dart';
+
+void main() {
+  PrinterTypeRegistry.register(
+      "ReceiptPrinter", (data) => ReceiptPrinter.fromMap(data!));
+  var device = BluetoothDevice(
+    'Device1',
+    '00:11:22:33:44:55',
+    'My Bluetooth Device',
+  );
+
+  device.printerTypes = [
+    ReceiptPrinter.fromMap({'extraProperty': "123"}),
+  ];
+
+  var toMap = device.toMap();
+  var fromMap = BluetoothDevice.fromMap(toMap);
+  runApp(new MyApp());
+}
 
 class MyApp extends StatefulWidget {
   @override
@@ -152,7 +173,8 @@ class _MyAppState extends State<MyApp> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: <Widget>[
                   ElevatedButton(
-                    style: ElevatedButton.styleFrom(primary: Colors.brown),
+                    style:
+                        ElevatedButton.styleFrom(backgroundColor: Colors.brown),
                     onPressed: () {
                       initPlatformState();
                     },
@@ -164,7 +186,8 @@ class _MyAppState extends State<MyApp> {
                   const SizedBox(width: 20),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                        primary: _connected ? Colors.red : Colors.green),
+                        backgroundColor:
+                            _connected ? Colors.red : Colors.green),
                     onPressed: _connected ? _disconnect : _connect,
                     child: Text(
                       _connected ? 'Disconnect' : 'Connect',
@@ -177,7 +200,8 @@ class _MyAppState extends State<MyApp> {
                 padding:
                     const EdgeInsets.only(left: 10.0, right: 10.0, top: 50),
                 child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(primary: Colors.brown),
+                  style:
+                      ElevatedButton.styleFrom(backgroundColor: Colors.brown),
                   onPressed: () {
                     testPrint.sample();
                   },
@@ -201,12 +225,16 @@ class _MyAppState extends State<MyApp> {
     } else {
       _devices.forEach((device) {
         items.add(DropdownMenuItem(
-          child: Text(device.name ?? ""),
+          child: Text(device.aliasName ?? ""),
           value: device,
         ));
       });
     }
     return items;
+  }
+
+  void testDeviceAlisName(BluetoothDevice device) {
+    bluetooth.getAliasName(device);
   }
 
   void _connect() {
@@ -231,7 +259,7 @@ class _MyAppState extends State<MyApp> {
 
   Future show(
     String message, {
-    Duration duration: const Duration(seconds: 3),
+    Duration duration = const Duration(seconds: 3),
   }) async {
     await new Future.delayed(new Duration(milliseconds: 100));
     ScaffoldMessenger.of(context).showSnackBar(
@@ -242,6 +270,40 @@ class _MyAppState extends State<MyApp> {
         ),
         duration: duration,
       ),
+    );
+  }
+}
+
+class ReceiptPrinter extends PrinterType {
+  @override
+  String get type => "ReceiptPrinter";
+
+  final String extraProperty;
+
+  ReceiptPrinter({required this.extraProperty});
+
+  @override
+  void execute() {}
+
+  @override
+  Map<String, dynamic> toMap() {
+    return {
+      'type': type,
+      "extraProperty": extraProperty
+      //'data': {}
+    };
+  }
+
+  factory ReceiptPrinter.fromMap(Map<String, dynamic> map) {
+    return ReceiptPrinter(extraProperty: map['extraProperty']);
+  }
+
+  @override
+  ReceiptPrinter copyWith({
+    String? extraProperty,
+  }) {
+    return ReceiptPrinter(
+      extraProperty: extraProperty ?? this.extraProperty,
     );
   }
 }
